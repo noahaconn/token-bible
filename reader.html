@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Greek NT Reader</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=GFS+Didot&display=swap">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'GFS Didot', 'Gentium Plus', 'Cardo', Georgia, serif;
+    background: #f9f7f2;
+    color: #222;
+    min-height: 100vh;
+  }
+
+  /* ── toolbar ── */
+  #toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #2c2c2a;
+    color: #eee;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #toolbar label { font-size: 13px; color: #aaa; }
+  #toolbar select {
+    padding: 5px 8px;
+    border-radius: 5px;
+    border: none;
+    font-size: 14px;
+    background: #444;
+    color: #eee;
+    cursor: pointer;
+  }
+  #toolbar select:disabled { opacity: 0.4; cursor: default; }
+
+  .file-btn {
+    padding: 5px 11px;
+    border-radius: 5px;
+    border: 1px solid #555;
+    background: #3a3a38;
+    color: #ddd;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .file-btn:hover { border-color: #aaa; color: #fff; }
+
+  #greek-count { font-size: 12px; color: #aaa; }
+  #clear-btn {
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid #666;
+    background: transparent;
+    color: #aaa;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #clear-btn:hover { border-color: #aaa; color: #eee; }
+  #toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* ── setup screen ── */
+  #setup {
+    max-width: 520px;
+    margin: 80px auto;
+    padding: 0 24px;
+    text-align: center;
+  }
+  #setup h1 { font-size: 22px; font-weight: 400; margin-bottom: 10px; color: #333; }
+  #setup p { font-size: 14px; color: #777; line-height: 1.7; margin-bottom: 28px; font-family: sans-serif; }
+  .setup-step {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    text-align: left;
+  }
+  .setup-step .step-label {
+    font-size: 11px;
+    font-family: sans-serif;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .setup-step .step-desc {
+    font-size: 13px;
+    font-family: sans-serif;
+    color: #666;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .big-file-btn {
+    display: inline-block;
+    padding: 8px 16px;
+    border-radius: 7px;
+    border: 1px solid #bbb;
+    background: #f4f4f2;
+    color: #333;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: sans-serif;
+  }
+  .big-file-btn:hover { background: #eae9e5; border-color: #999; }
+  .status-ok { color: #1a6b4a; font-size: 13px; font-family: sans-serif; margin-top: 8px; }
+  .status-err { color: #a33; font-size: 13px; font-family: sans-serif; margin-top: 8px; }
+  #start-btn {
+    margin-top: 8px;
+    padding: 10px 28px;
+    border-radius: 8px;
+    border: none;
+    background: #1a6b4a;
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
+    display: none;
+  }
+  #start-btn:hover { background: #155a3d; }
+
+  /* ── main reader ── */
+  #main { display: none; }
+  #content {
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 32px 24px 120px;
+  }
+  #chapter-heading {
+    font-size: 13px;
+    color: #888;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    font-family: sans-serif;
+  }
+
+  /* ── verses ── */
+  .verse { margin-bottom: 14px; line-height: 2.1; font-size: 17px; }
+  .vnum {
+    font-size: 10px;
+    color: #bbb;
+    vertical-align: super;
+    margin-right: 3px;
+    font-family: sans-serif;
+    user-select: none;
+  }
+  .token {
+    display: inline;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 1px 1px;
+    transition: background 0.1s;
+  }
+  .token:hover { background: #e8e2d5; }
+  .token.in-greek { color: #1a6b4a; font-style: italic; }
+  .token.active { background: #d5eae0 !important; }
+
+  /* ── popover ── */
+  #popover {
+    display: none;
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(460px, calc(100vw - 32px));
+    background: #fff;
+    border: 1px solid #d4d0c8;
+    border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.13);
+    padding: 18px 20px 16px;
+    z-index: 100;
+  }
+  #popover.visible { display: block; }
+  #pop-close {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none;
+    font-size: 18px; color: #aaa; cursor: pointer; line-height: 1;
+  }
+  #pop-close:hover { color: #444; }
+  #pop-english { font-size: 12px; color: #999; margin-bottom: 2px; font-family: sans-serif; }
+  #pop-greek-form { font-size: 26px; font-weight: 400; color: #111; margin-bottom: 1px; }
+  #pop-lemma-line {
+    font-size: 12px; color: #777; font-style: italic;
+    font-family: sans-serif; margin-bottom: 10px;
+  }
+  #pop-strong { font-family: monospace; font-style: normal; color: #aaa; }
+  #pop-divider { border: none; border-top: 1px solid #eee; margin: 10px 0; }
+  #pop-def { font-size: 14px; color: #444; line-height: 1.6; margin-bottom: 6px; }
+  #pop-kjv { font-size: 12px; color: #888; font-family: sans-serif; margin-bottom: 14px; }
+  #pop-toggle {
+    width: 100%; padding: 9px; border-radius: 8px; border: none;
+    font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s;
+  }
+  #pop-toggle.to-greek { background: #1a6b4a; color: #fff; }
+  #pop-toggle.to-greek:hover { background: #155a3d; }
+  #pop-toggle.to-english { background: #edf7f2; color: #1a6b4a; border: 1px solid #a3d4bc; }
+  #pop-toggle.to-english:hover { background: #d5eae0; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ TOOLBAR -->
+<div id="toolbar" style="display:none">
+  <label for="book-sel">Book</label>
+  <select id="book-sel"></select>
+
+  <label for="ch-sel">Chapter</label>
+  <select id="ch-sel" disabled><option>—</option></select>
+
+  <button class="file-btn" id="load-more-btn">+ Load more books…</button>
+
+  <div id="toolbar-right">
+    <span id="greek-count"></span>
+    <button id="clear-btn" style="display:none">Clear all Greek</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ SETUP -->
+<div id="setup">
+  <h1>Greek NT Reader</h1>
+  <p>This runs entirely in your browser — no server needed.<br>
+     Just point it at the files you already generated.</p>
+
+  <!-- Step 1: Strongs -->
+  <div class="setup-step">
+    <div class="step-label">Step 1 — Strong's dictionary</div>
+    <div class="step-desc">Select the <code>strongs-greek.json</code> file.</div>
+    <label class="big-file-btn">
+      Choose strongs-greek.json
+      <input type="file" id="strongs-file" accept=".json" style="display:none">
+    </label>
+    <div id="strongs-status"></div>
+  </div>
+
+  <!-- Step 2: Book JSONs -->
+  <div class="setup-step">
+    <div class="step-label">Step 2 — Book files</div>
+    <div class="step-desc">
+      Select one or more book JSON files (e.g. <code>MAT.json</code>, <code>JDE.json</code>).<br>
+      You can load more later from the toolbar.
+    </div>
+    <label class="big-file-btn">
+      Choose book JSON files
+      <input type="file" id="books-file" accept=".json" multiple style="display:none">
+    </label>
+    <div id="books-status"></div>
+  </div>
+
+  <button id="start-btn">Open Reader →</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ READER -->
+<div id="main">
+  <div id="content">
+    <div id="chapter-heading"></div>
+    <div id="verses"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ POPOVER -->
+<div id="popover">
+  <button id="pop-close" title="Close">×</button>
+  <div id="pop-english"></div>
+  <div id="pop-greek-form"></div>
+  <div id="pop-lemma-line">
+    <span id="pop-lemma"></span> &nbsp;·&nbsp;
+    <span id="pop-translit"></span> &nbsp;·&nbsp;
+    <span id="pop-strong"></span>
+  </div>
+  <hr id="pop-divider">
+  <div id="pop-def"></div>
+  <div id="pop-kjv"></div>
+  <button id="pop-toggle" class="to-greek">Show Greek</button>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────
+// Book list — canonical order + display names
+// ─────────────────────────────────────────────────────────────────────
+const BOOK_LIST = [
+  ['MAT','Matthew'],['MRK','Mark'],['LUK','Luke'],['JHN','John'],
+  ['ACT','Acts'],['ROM','Romans'],['1CO','1 Corinthians'],['2CO','2 Corinthians'],
+  ['GAL','Galatians'],['EPH','Ephesians'],['PHP','Philippians'],['COL','Colossians'],
+  ['1TH','1 Thessalonians'],['2TH','2 Thessalonians'],['1TI','1 Timothy'],
+  ['2TI','2 Timothy'],['TIT','Titus'],['PHM','Philemon'],['HEB','Hebrews'],
+  ['JAS','James'],['1PE','1 Peter'],['2PE','2 Peter'],['1JN','1 John'],
+  ['2JN','2 John'],['3JN','3 John'],['JDE','Jude'],['REV','Revelation'],
+];
+const BOOK_ORDER = BOOK_LIST.map(b => b[0]);
+const BOOK_NAMES = Object.fromEntries(BOOK_LIST);
+
+// ─────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────
+let strongsDict  = {};   // G976 → entry
+let loadedBooks  = {};   // 'MAT' → [verse, ...]
+let greekSet     = new Set();
+let activeTokenEl = null;
+let activeToken   = null;
+
+// ─────────────────────────────────────────────────────────────────────
+// Persistence (localStorage)
+// ─────────────────────────────────────────────────────────────────────
+function saveGreekSet() {
+  try { localStorage.setItem('nt-greek-set', JSON.stringify([...greekSet])); } catch(e){}
+}
+function loadGreekSet() {
+  try {
+    const s = localStorage.getItem('nt-greek-set');
+    if (s) greekSet = new Set(JSON.parse(s));
+  } catch(e){}
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Strong's lookup — our parser zero-pads (G0976), dict doesn't (G976)
+// ─────────────────────────────────────────────────────────────────────
+function lookupStrongs(padded) {
+  const key = padded.replace(/^([GH])0+/, '$1');
+  return strongsDict[key] || null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// File reading helpers
+// ─────────────────────────────────────────────────────────────────────
+function readFileAsJSON(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try { resolve(JSON.parse(e.target.result.normalize('NFC'))); }
+      catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Setup — Step 1: Strong's file
+// ─────────────────────────────────────────────────────────────────────
+document.getElementById('strongs-file').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('strongs-status');
+  try {
+    strongsDict = await readFileAsJSON(file);
+    const n = Object.keys(strongsDict).length;
+    status.className = 'status-ok';
+    status.textContent = `✓ Loaded ${n.toLocaleString()} entries`;
+  } catch(err) {
+    status.className = 'status-err';
+    status.textContent = '✗ Could not parse file — make sure it\'s strongs-greek.json';
+  }
+  checkReadyToStart();
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Setup — Step 2: Book files
+// ─────────────────────────────────────────────────────────────────────
+async function loadBookFiles(files) {
+  const status = document.getElementById('books-status');
+  const results = [];
+  for (const file of files) {
+    // Derive book code from filename: "MAT.json" → "MAT"
+    const code = file.name.replace(/\.json$/i, '').toUpperCase();
+    try {
+      const verses = await readFileAsJSON(file);
+      loadedBooks[code] = verses;
+      results.push(code);
+    } catch(err) {
+      console.warn('Could not parse', file.name, err);
+    }
+  }
+  // Sort loaded books in canonical order
+  const ordered = BOOK_ORDER.filter(c => loadedBooks[c]);
+  const names   = ordered.map(c => BOOK_NAMES[c] || c).join(', ');
+  status.className = 'status-ok';
+  status.textContent = `✓ Loaded: ${names}`;
+  return results;
+}
+
+document.getElementById('books-file').addEventListener('change', async e => {
+  await loadBookFiles(Array.from(e.target.files));
+  checkReadyToStart();
+});
+
+function checkReadyToStart() {
+  const hasStrongs = Object.keys(strongsDict).length > 0;
+  const hasBooks   = Object.keys(loadedBooks).length > 0;
+  document.getElementById('start-btn').style.display =
+    (hasStrongs && hasBooks) ? 'inline-block' : 'none';
+}
+
+document.getElementById('start-btn').addEventListener('click', startReader);
+
+// ─────────────────────────────────────────────────────────────────────
+// "Load more books" from toolbar
+// ─────────────────────────────────────────────────────────────────────
+document.getElementById('load-more-btn').addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.multiple = true;
+  input.onchange = async () => {
+    const newCodes = await loadBookFiles(Array.from(input.files));
+    rebuildBookSelector(newCodes[0]); // jump to first newly loaded book
+  };
+  input.click();
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Start the reader
+// ─────────────────────────────────────────────────────────────────────
+function startReader() {
+  loadGreekSet();
+  document.getElementById('setup').style.display   = 'none';
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('main').style.display    = 'block';
+  rebuildBookSelector();
+  updateGreekCount();
+}
+
+function rebuildBookSelector(jumpToCode) {
+  const sel = document.getElementById('book-sel');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  const ordered = BOOK_ORDER.filter(c => loadedBooks[c]);
+  ordered.forEach(code => {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = BOOK_NAMES[code] || code;
+    sel.appendChild(opt);
+  });
+  // Restore selection or jump to new book
+  const target = jumpToCode || prev;
+  if (target && loadedBooks[target]) sel.value = target;
+  onBookChange();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Book / chapter navigation
+// ─────────────────────────────────────────────────────────────────────
+document.getElementById('book-sel').addEventListener('change', () => onBookChange());
+
+function onBookChange(targetChapter) {
+  const code = document.getElementById('book-sel').value;
+  if (!code || !loadedBooks[code]) return;
+  closePopover();
+
+  const allVerses = loadedBooks[code];
+  const chapters  = [...new Set(allVerses.map(v => v.chapter))].sort((a,b) => a-b);
+
+  const chSel = document.getElementById('ch-sel');
+  chSel.innerHTML = '';
+  chapters.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    chSel.appendChild(opt);
+  });
+  chSel.disabled = false;
+
+  const chapter = (targetChapter && chapters.includes(targetChapter))
+    ? targetChapter : chapters[0];
+  chSel.value = chapter;
+
+  renderChapter(code, chapter);
+  chSel.onchange = () => renderChapter(code, parseInt(chSel.value));
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Render chapter
+// ─────────────────────────────────────────────────────────────────────
+function renderChapter(bookCode, chapter) {
+  closePopover();
+  const allVerses = loadedBooks[bookCode];
+  const verses    = allVerses.filter(v => v.chapter === chapter);
+  const bookName  = BOOK_NAMES[bookCode] || bookCode;
+
+  document.getElementById('chapter-heading').textContent =
+    `${bookName} · Chapter ${chapter}`;
+
+  const container = document.getElementById('verses');
+  container.innerHTML = '';
+
+  verses.forEach(verse => {
+    const vdiv = document.createElement('div');
+    vdiv.className = 'verse';
+
+    const vnum = document.createElement('span');
+    vnum.className = 'vnum';
+    vnum.textContent = verse.verse;
+    vdiv.appendChild(vnum);
+
+    verse.tokens.forEach((tok, i) => {
+      const span       = document.createElement('span');
+      span.className   = 'token';
+      span.dataset.strong  = tok.strong;
+      span.dataset.surface = tok.surface;
+      span.dataset.english = tok.english;
+
+      const inGreek      = greekSet.has(tok.strong);
+      span.textContent   = inGreek ? tok.surface : tok.english;
+      if (inGreek) span.classList.add('in-greek');
+
+      span.addEventListener('click', e => {
+        e.stopPropagation();
+        openPopover(span, tok);
+      });
+      vdiv.appendChild(span);
+
+      if (i < verse.tokens.length - 1) {
+        vdiv.appendChild(document.createTextNode(' '));
+      }
+    });
+
+    container.appendChild(vdiv);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Popover
+// ─────────────────────────────────────────────────────────────────────
+function openPopover(el, tok) {
+  if (activeTokenEl) activeTokenEl.classList.remove('active');
+  activeTokenEl = el;
+  activeToken   = tok;
+  el.classList.add('active');
+
+  const entry   = lookupStrongs(tok.strong);
+  const inGreek = greekSet.has(tok.strong);
+
+  document.getElementById('pop-english').textContent    = `"${tok.english}"`;
+  document.getElementById('pop-greek-form').textContent = tok.surface;
+  document.getElementById('pop-lemma').textContent      = entry?.lemma    ?? tok.surface;
+  document.getElementById('pop-translit').textContent   = entry?.translit ?? '';
+  document.getElementById('pop-strong').textContent     = tok.strong;
+
+  const def = entry
+    ? (entry.strongs_def || entry.derivation || '').trim()
+    : '(no definition found)';
+  document.getElementById('pop-def').textContent = def;
+  document.getElementById('pop-kjv').textContent = entry ? `KJV: "${entry.kjv_def}"` : '';
+
+  refreshToggleBtn(inGreek);
+  document.getElementById('popover').classList.add('visible');
+}
+
+function closePopover() {
+  if (activeTokenEl) { activeTokenEl.classList.remove('active'); activeTokenEl = null; }
+  activeToken = null;
+  document.getElementById('popover').classList.remove('visible');
+}
+
+function refreshToggleBtn(inGreek) {
+  const btn = document.getElementById('pop-toggle');
+  if (inGreek) {
+    btn.textContent = '↩ Restore English';
+    btn.className   = 'to-english';
+  } else {
+    btn.textContent = 'Show Greek';
+    btn.className   = 'to-greek';
+  }
+}
+
+document.getElementById('pop-close').addEventListener('click', closePopover);
+document.addEventListener('click', e => {
+  if (!e.target.closest('#popover') && !e.target.closest('.token')) closePopover();
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Toggle Greek ↔ English
+// ─────────────────────────────────────────────────────────────────────
+document.getElementById('pop-toggle').addEventListener('click', () => {
+  if (!activeToken) return;
+  const strong  = activeToken.strong;
+  const inGreek = greekSet.has(strong);
+
+  if (inGreek) { greekSet.delete(strong); } else { greekSet.add(strong); }
+  saveGreekSet();
+  updateGreekCount();
+
+  // Flip every visible token with this strong number
+  document.querySelectorAll(`.token[data-strong="${strong}"]`).forEach(span => {
+    const nowGreek   = greekSet.has(strong);
+    span.textContent = nowGreek ? span.dataset.surface : span.dataset.english;
+    span.classList.toggle('in-greek', nowGreek);
+  });
+
+  refreshToggleBtn(greekSet.has(strong));
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Clear all
+// ─────────────────────────────────────────────────────────────────────
+document.getElementById('clear-btn').addEventListener('click', () => {
+  greekSet.clear();
+  saveGreekSet();
+  updateGreekCount();
+  document.querySelectorAll('.token.in-greek').forEach(span => {
+    span.textContent = span.dataset.english;
+    span.classList.remove('in-greek');
+  });
+  closePopover();
+});
+
+function updateGreekCount() {
+  const n   = greekSet.size;
+  const el  = document.getElementById('greek-count');
+  const btn = document.getElementById('clear-btn');
+  el.textContent      = n > 0 ? `${n} word${n > 1 ? 's' : ''} in Greek` : '';
+  btn.style.display   = n > 0 ? 'inline-block' : 'none';
+}
+</script>
+</body>
+</html>
